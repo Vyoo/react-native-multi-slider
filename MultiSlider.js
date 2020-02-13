@@ -7,7 +7,7 @@ import {
   Platform,
   Dimensions,
   I18nManager,
-  ImageBackground
+  ImageBackground,
 } from 'react-native';
 
 import DefaultMarker from './DefaultMarker';
@@ -45,10 +45,66 @@ export default class MultiSlider extends React.Component {
     snapped: false,
     vertical: false,
     minMarkerOverlapDistance: 0,
-    leftKnobComponent: null,
-    rightKnobComponent: null,
-    showLabel: false
   };
+
+  static getDerivedStateFromProps(props, state) {
+    const {
+      onePressed,
+      twoPressed,
+      min,
+      max,
+      step,
+      sliderLength,
+      valueOne,
+      valueTwo,
+      optionsArray,
+    } = state;
+    if (onePressed || twoPressed) {
+      return null;
+    }
+
+    let nextState = {};
+
+    if (
+      props.min !== min ||
+      props.max !== max ||
+      props.step !== step ||
+      props.values[0] !== valueOne ||
+      props.sliderLength !== sliderLength ||
+      props.values[1] !== valueTwo ||
+      (props.sliderLength !== sliderLength && props.values[1])
+    ) {
+      this.optionsArray =
+        optionsArray || createArray(props.min, props.max, props.step);
+
+      this.stepLength = sliderLength / this.optionsArray.length;
+
+      const positionOne = valueToPosition(
+        props.values[0],
+        this.optionsArray,
+        props.sliderLength,
+      );
+      nextState.valueOne = props.values[0];
+      nextState.pastOne = positionOne;
+      nextState.positionOne = positionOne;
+
+      const positionTwo = valueToPosition(
+        props.values[1],
+        this.optionsArray,
+        props.sliderLength,
+      );
+      nextState.valueTwo = props.values[1];
+      nextState.pastTwo = positionTwo;
+      nextState.positionTwo = positionTwo;
+    }
+
+    if (nextState != {}) {
+      return {
+        ...state,
+        ...nextState,
+      };
+    }
+  }
 
   constructor(props) {
     super(props);
@@ -71,9 +127,11 @@ export default class MultiSlider extends React.Component {
       positionOne: initialValues[0],
       positionTwo: initialValues[1],
     };
+
+    this.subscribePanResponder();
   }
 
-  componentWillMount() {
+  subscribePanResponder = () => {
     var customPanResponder = (start, move, end) => {
       return PanResponder.create({
         onStartShouldSetPanResponder: (evt, gestureState) => true,
@@ -88,21 +146,21 @@ export default class MultiSlider extends React.Component {
         onShouldBlockNativeResponder: (evt, gestureState) => true,
       });
     };
-    
+
     this._panResponderBetween = customPanResponder(
-      (gestureState) => {
+      gestureState => {
         this.startOne(gestureState);
         this.startTwo(gestureState);
       },
-      (gestureState) => {
+      gestureState => {
         this.moveOne(gestureState);
         this.moveTwo(gestureState);
       },
-      (gestureState) => {
+      gestureState => {
         this.endOne(gestureState);
         this.endTwo(gestureState);
-      }
-    )
+      },
+    );
 
     this._panResponderOne = customPanResponder(
       this.startOne,
@@ -114,57 +172,7 @@ export default class MultiSlider extends React.Component {
       this.moveTwo,
       this.endTwo,
     );
-  }
-
-  componentWillReceiveProps(nextProps) {
-    if (this.state.onePressed || this.state.twoPressed) {
-      return;
-    }
-
-    let nextState = {};
-    if (
-      nextProps.min !== this.props.min ||
-      nextProps.max !== this.props.max ||
-      nextProps.step !== this.props.step ||
-      nextProps.values[0] !== this.state.valueOne ||
-      nextProps.sliderLength !== this.props.sliderLength ||
-      nextProps.values[1] !== this.state.valueTwo ||
-      (nextProps.sliderLength !== this.props.sliderLength &&
-        nextProps.values[1])
-    ) {
-      this.optionsArray =
-        this.props.optionsArray ||
-        createArray(nextProps.min, nextProps.max, nextProps.step);
-
-      this.stepLength = this.props.sliderLength / this.optionsArray.length;
-
-      var positionOne = valueToPosition(
-        nextProps.values[0],
-        this.optionsArray,
-        nextProps.sliderLength,
-      );
-      nextState.valueOne = nextProps.values[0];
-      nextState.pastOne = positionOne;
-      nextState.positionOne = positionOne;
-
-      var positionTwo = valueToPosition(
-        nextProps.values[1],
-        this.optionsArray,
-        nextProps.sliderLength,
-      );
-      nextState.valueTwo = nextProps.values[1];
-      nextState.pastTwo = positionTwo;
-      nextState.positionTwo = positionTwo;
-    }
-
-    if (nextState != {}) {
-      this.setState(nextState);
-
-      if (typeof nextState.positionOne !== 'undefined' && typeof nextState.positionTwo !== 'undefined') {
-          this.props.onMarkersPosition([nextState.positionOne, nextState.positionTwo]);
-      }
-    }
-  }
+  };
 
   startOne = () => {
     if (this.props.enabledOne) {
@@ -201,9 +209,12 @@ export default class MultiSlider extends React.Component {
       : accumDistance + this.state.pastOne;
     var bottom = 0;
     var trueTop =
-        this.state.positionTwo - (this.props.allowOverlap ? 0 : this.props.minMarkerOverlapDistance > 0
-            ? this.props.minMarkerOverlapDistance
-            : this.stepLength);
+      this.state.positionTwo -
+      (this.props.allowOverlap
+        ? 0
+        : this.props.minMarkerOverlapDistance > 0
+        ? this.props.minMarkerOverlapDistance
+        : this.stepLength);
     var top = trueTop === 0 ? 0 : trueTop || this.props.sliderLength;
     var confined =
       unconfined < bottom ? bottom : unconfined > top ? top : unconfined;
@@ -239,7 +250,10 @@ export default class MultiSlider extends React.Component {
             }
             this.props.onValuesChange(change);
 
-            this.props.onMarkersPosition([this.state.positionOne, this.state.positionTwo]);
+            this.props.onMarkersPosition([
+              this.state.positionOne,
+              this.state.positionTwo,
+            ]);
           },
         );
       }
@@ -262,10 +276,12 @@ export default class MultiSlider extends React.Component {
       ? this.state.pastTwo - accumDistance
       : accumDistance + this.state.pastTwo;
     var bottom =
-      this.state.positionOne + (this.props.allowOverlap ? 0
-          : this.props.minMarkerOverlapDistance > 0
-              ? this.props.minMarkerOverlapDistance
-              : this.stepLength);
+      this.state.positionOne +
+      (this.props.allowOverlap
+        ? 0
+        : this.props.minMarkerOverlapDistance > 0
+        ? this.props.minMarkerOverlapDistance
+        : this.stepLength);
     var top = this.props.sliderLength;
     var confined =
       unconfined < bottom ? bottom : unconfined > top ? top : unconfined;
@@ -296,9 +312,15 @@ export default class MultiSlider extends React.Component {
             valueTwo: value,
           },
           () => {
-            this.props.onValuesChange([this.state.valueOne, this.state.valueTwo]);
+            this.props.onValuesChange([
+              this.state.valueOne,
+              this.state.valueTwo,
+            ]);
 
-            this.props.onMarkersPosition([this.state.positionOne, this.state.positionTwo]);
+            this.props.onMarkersPosition([
+              this.state.positionOne,
+              this.state.positionTwo,
+            ]);
           },
         );
       }
@@ -345,6 +367,25 @@ export default class MultiSlider extends React.Component {
       },
     );
   };
+
+  componentDidUpdate(_, prevState) {
+    const {
+      positionOne: prevPositionOne,
+      positionTwo: prevPositionTwo,
+    } = prevState;
+    const { positionOne, positionTwo } = this.state;
+
+    if (
+      typeof positionOne === 'undefined' &&
+      typeof positionTwo !== 'undefined'
+    ) {
+      return;
+    }
+
+    if (positionOne !== prevPositionOne || positionTwo !== prevPositionTwo) {
+      this.props.onMarkersPosition([positionOne, positionTwo]);
+    }
+  }
 
   render() {
     const { positionOne, positionTwo } = this.state;
@@ -403,8 +444,9 @@ export default class MultiSlider extends React.Component {
       });
     }
 
-    const body = (<React.Fragment>
-      <View style={[styles.fullTrack, { width: sliderLength }]}>
+    const body = (
+      <React.Fragment>
+        <View style={[styles.fullTrack, { width: sliderLength }]}>
           <View
             style={[
               styles.track,
@@ -421,24 +463,6 @@ export default class MultiSlider extends React.Component {
               { width: trackTwoLength },
             ]}
             {...(twoMarkers ? this._panResponderBetween.panHandlers : {})}
-          />
-          {twoMarkers && (
-            <View
-              style={[
-                styles.track,
-                this.props.trackStyle,
-                trackOneStyle,
-                { width: trackOneLength },
-              ]}
-            />
-          )}
-          <View
-            style={[
-              styles.track,
-              this.props.trackStyle,
-              trackTwoStyle,
-              { width: trackTwoLength },
-            ]}
           />
           {twoMarkers && (
             <View
@@ -473,9 +497,7 @@ export default class MultiSlider extends React.Component {
                   currentValue={this.state.valueOne}
                   valuePrefix={this.props.valuePrefix}
                   valueSuffix={this.props.valueSuffix}
-                >
-                  {this.props.leftKnobComponent}
-                </Marker>
+                />
               ) : (
                 <MarkerLeft
                   enabled={this.props.enabledOne}
@@ -486,80 +508,78 @@ export default class MultiSlider extends React.Component {
                   currentValue={this.state.valueOne}
                   valuePrefix={this.props.valuePrefix}
                   valueSuffix={this.props.valueSuffix}
-                >
-                  {this.props.leftKnobComponent}
-                </MarkerLeft>
+                />
               )}
             </View>
           </View>
-          {twoMarkers &&
-            positionOne !== this.props.sliderLength && (
+          {twoMarkers && positionOne !== this.props.sliderLength && (
+            <View
+              style={[
+                styles.markerContainer,
+                markerContainerTwo,
+                this.props.markerContainerStyle,
+              ]}
+            >
               <View
-                style={[
-                  styles.markerContainer,
-                  markerContainerTwo,
-                  this.props.markerContainerStyle,
-                ]}
+                style={[styles.touch, touchStyle]}
+                ref={component => (this._markerTwo = component)}
+                {...this._panResponderTwo.panHandlers}
               >
-                <View
-                  style={[styles.touch, touchStyle]}
-                  ref={component => (this._markerTwo = component)}
-                  {...this._panResponderTwo.panHandlers}
-                >
-                  {isMarkersSeparated === false ? (
-                    <Marker
-                      pressed={this.state.twoPressed}
-                      markerStyle={this.props.markerStyle}
-                      pressedMarkerStyle={this.props.pressedMarkerStyle}
-                      disabledMarkerStyle={this.props.disabledMarkerStyle}
-                      currentValue={this.state.valueTwo}
-                      enabled={this.props.enabledTwo}
-                      valuePrefix={this.props.valuePrefix}
-                      valueSuffix={this.props.valueSuffix}
-                    >
-                      {this.props.rightKnobComponent}
-                    </Marker>
-                  ) : (
-                    <MarkerRight
-                      pressed={this.state.twoPressed}
-                      markerStyle={this.props.markerStyle}
-                      pressedMarkerStyle={this.props.pressedMarkerStyle}
-                      disabledMarkerStyle={this.props.disabledMarkerStyle}
-                      currentValue={this.state.valueTwo}
-                      enabled={this.props.enabledTwo}
-                      valuePrefix={this.props.valuePrefix}
-                      valueSuffix={this.props.valueSuffix}
-                    >
-                      {this.props.rightKnobComponent}
-                    </MarkerRight>
-                  )}
-                </View>
+                {isMarkersSeparated === false ? (
+                  <Marker
+                    pressed={this.state.twoPressed}
+                    markerStyle={this.props.markerStyle}
+                    pressedMarkerStyle={this.props.pressedMarkerStyle}
+                    disabledMarkerStyle={this.props.disabledMarkerStyle}
+                    currentValue={this.state.valueTwo}
+                    enabled={this.props.enabledTwo}
+                    valuePrefix={this.props.valuePrefix}
+                    valueSuffix={this.props.valueSuffix}
+                  />
+                ) : (
+                  <MarkerRight
+                    pressed={this.state.twoPressed}
+                    markerStyle={this.props.markerStyle}
+                    pressedMarkerStyle={this.props.pressedMarkerStyle}
+                    disabledMarkerStyle={this.props.disabledMarkerStyle}
+                    currentValue={this.state.valueTwo}
+                    enabled={this.props.enabledTwo}
+                    valuePrefix={this.props.valuePrefix}
+                    valueSuffix={this.props.valueSuffix}
+                  />
+                )}
               </View>
-            )}
-          </View>
-    </React.Fragment>);
-    const leftDiff = (Dimensions.get('window').width - this.props.sliderLength) / 2;
+            </View>
+          )}
+        </View>
+      </React.Fragment>
+    );
+    const leftDiff =
+      (Dimensions.get('window').width - this.props.sliderLength) / 2;
     return (
       <View>
-        {this.props.showLabel &&
+        {this.props.enableLabel && (
           <Label
             leftDiff={leftDiff}
             oneMarkerValue={this.state.valueOne}
             twoMarkerValue={this.state.valueTwo}
             oneMarkerLeftPosition={positionOne}
             twoMarkerLeftPosition={positionTwo}
+            oneMarkerPressed={this.state.onePressed}
+            twoMarkerPressed={this.state.twoPressed}
           />
-        }
-        {this.props.imageBackgroundSource && 
-          <ImageBackground source={this.props.imageBackgroundSource} style={[{width: '100%', height: '100%'}, containerStyle]}>
+        )}
+        {this.props.imageBackgroundSource && (
+          <ImageBackground
+            source={this.props.imageBackgroundSource}
+            style={[{ width: '100%', height: '100%' }, containerStyle]}
+          >
             {body}
           </ImageBackground>
-        }
-        {!this.props.imageBackgroundSource &&
-          <View style={containerStyle}>
-            {body}
-          </View>
-        }
+        )}
+        {!this.props.imageBackgroundSource && (
+          <View style={containerStyle}>{body}</View>
+        )}
       </View>
     );
   }
@@ -569,7 +589,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     height: 50,
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   fullTrack: {
     flexDirection: 'row',
@@ -585,11 +605,11 @@ const styles = StyleSheet.create({
         height: 2,
         backgroundColor: '#CECECE',
       },
-      web:{
+      web: {
         height: 2,
         borderRadius: 2,
         backgroundColor: '#A7A7A7',
-      }
+      },
     }),
   },
   selectedTrack: {
@@ -600,9 +620,9 @@ const styles = StyleSheet.create({
       android: {
         backgroundColor: '#0D8675',
       },
-      web:{
+      web: {
         backgroundColor: '#095FFF',
-      }
+      },
     }),
   },
   markerContainer: {
